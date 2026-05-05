@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENTINEL — Industrial Anomaly Detection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #030609;
+    --surface: #080e14;
+    --panel: #0a1520;
+    --border: #0d2137;
+    --accent: #00d4ff;
+    --accent2: #ff4d00;
+    --accent3: #00ff88;
+    --warn: #ffaa00;
+    --text: #c8dde8;
+    --text-dim: #4a6272;
+    --text-bright: #e8f4ff;
+    --danger: #ff2244;
+    --safe: #00ff88;
+    --grid: rgba(0,212,255,0.04);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 400;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { position: relative; z-index: 1; max-width: 1600px; margin: 0 auto; padding: 0 20px 40px; }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 30px;
+  }
+
+  .logo { display: flex; align-items: center; gap: 16px; }
+  .logo h1 { font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 700; letter-spacing: 2px; }
+  .status-badge { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(0,255,136,0.1); border: 1px solid var(--safe); border-radius: 4px; font-size: 12px; }
+  .status-dot { width: 8px; height: 8px; background: var(--safe); border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-bottom: 30px; }
+
+  .panel {
+    background: linear-gradient(135deg, var(--panel) 0%, rgba(10,21,32,0.5) 100%);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+  }
+
+  .panel:hover { border-color: var(--accent); box-shadow: 0 0 20px rgba(0,212,255,0.1); }
+
+  .panel-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(0,212,255,0.2);
+  }
+
+  .input-group { margin-bottom: 16px; }
+  label { display: block; font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+
+  input, select {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(8,14,20,0.8);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+
+  input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 10px rgba(0,212,255,0.2); }
+
+  .button-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .button { grid-column: span 2; }
+
+  button {
+    width: 100%;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, var(--accent) 0%, #00a8cc 100%);
+    color: #000;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+
+  button:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,212,255,0.3); }
+  button:active { transform: translateY(0); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+  .stat { background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.2); border-radius: 4px; padding: 12px; text-align: center; }
+  .stat-value { font-size: 18px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+  .stat-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .chart-container { position: relative; width: 100%; height: 250px; margin-bottom: 12px; }
+
+  .alert {
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    display: none;
+  }
+
+  .alert.show { display: block; }
+  .alert.success { background: rgba(0,255,136,0.1); border: 1px solid var(--safe); color: var(--safe); }
+  .alert.warning { background: rgba(255,170,0,0.1); border: 1px solid var(--warn); color: var(--warn); }
+  .alert.error { background: rgba(255,34,68,0.1); border: 1px solid var(--danger); color: var(--danger); }
+
+  .detection-result {
+    padding: 16px;
+    border-radius: 4px;
+    margin-top: 12px;
+    text-align: center;
+    display: none;
+  }
+
+  .detection-result.show { display: block; }
+  .detection-result.anomaly { background: rgba(255,34,68,0.15); border: 2px solid var(--danger); }
+  .detection-result.normal { background: rgba(0,255,136,0.15); border: 2px solid var(--safe); }
+
+  .result-title { font-weight: 700; margin-bottom: 8px; font-size: 16px; }
+  .result-value { font-size: 20px; font-weight: 700; margin: 8px 0; }
+
+  .sensor-input { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .sensor-input input { font-size: 12px; padding: 8px; }
+
+  @media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr; }
+    .button-group { grid-template-columns: 1fr; }
+    .button { grid-column: span 1; }
+    .stats { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="logo">
+      <h1>◆ SENTINEL</h1>
+    </div>
+    <div class="status-badge">
+      <span class="status-dot"></span>
+      <span>ONLINE</span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- TRAINING PANEL -->
+    <div class="panel">
+      <div class="panel-title">Model Training</div>
+      <div class="input-group">
+        <label>Training Samples</label>
+        <input type="number" id="nSamples" value="1000" min="100" max="5000">
+      </div>
+      <div class="input-group">
+        <label>Epochs</label>
+        <input type="number" id="epochs" value="50" min="10" max="200">
+      </div>
+      <div class="alert" id="trainingAlert"></div>
+      <button onclick="trainModel()" id="trainBtn">TRAIN MODEL</button>
+      <div class="stats" style="margin-top: 16px;">
+        <div class="stat">
+          <div class="stat-value" id="trainingLoss">-</div>
+          <div class="stat-label">Final Loss</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="trainingStatus">IDLE</div>
+          <div class="stat-label">Status</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANOMALY DETECTION PANEL -->
+    <div class="panel">
+      <div class="panel-title">Anomaly Detection</div>
+      <label>Sensor Values (8 sensors)</label>
+      <div class="sensor-input" id="sensorInputs"></div>
+      <button onclick="detectAnomaly()" id="detectBtn" disabled>DETECT ANOMALY</button>
+      <div class="detection-result" id="detectionResult"></div>
+    </div>
+
+    <!-- SCENARIO SIMULATION PANEL -->
+    <div class="panel">
+      <div class="panel-title">Scenario Simulation</div>
+      <div class="input-group">
+        <label>Scenario Type</label>
+        <select id="scenarioType">
+          <option value="normal">Normal Operation</option>
+          <option value="spike">Sudden Spike</option>
+          <option value="drift">Gradual Drift</option>
+          <option value="oscillation">Oscillation</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>Data Points</label>
+        <input type="number" id="nPoints" value="50" min="10" max="200">
+      </div>
+      <button onclick="simulateScenario()">SIMULATE</button>
+      <div class="stats" style="margin-top: 16px;">
+        <div class="stat">
+          <div class="stat-value" id="anomaliesCount">0</div>
+          <div class="stat-label">Anomalies Found</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="totalDetections">0</div>
+          <div class="stat-label">Total Detections</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW -->
+  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));">
+    <div class="panel">
+      <div class="panel-title">Training Loss</div>
+      <div class="chart-container">
+        <canvas id="lossChart"></canvas>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Simulation Data</div>
+      <div class="chart-container">
+        <canvas id="simulationChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Global state
+let model = new SensorAutoencoder();
+let lossChart = null;
+let simulationChart = null;
+
+// Initialize sensor inputs
+function initializeSensorInputs() {
+  const container = document.getElementById('sensorInputs');
+  for (let i = 0; i < 8; i++) {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.placeholder = `S${i + 1}`;
+    input.value = 50;
+    input.min = 0;
+    input.max = 100;
+    container.appendChild(input);
+  }
+}
+
+function showAlert(message, type = 'success') {
+  const alert = document.getElementById('trainingAlert');
+  alert.textContent = message;
+  alert.className = `alert show ${type}`;
+  setTimeout(() => alert.classList.remove('show'), 5000);
+}
+
+async function trainModel() {
+  const nSamples = parseInt(document.getElementById('nSamples').value);
+  const epochs = parseInt(document.getElementById('epochs').value);
+  const btn = document.getElementById('trainBtn');
+
+  btn.disabled = true;
+  document.getElementById('trainingStatus').textContent = 'TRAINING...';
+
+  try {
+    // Generate training data
+    const trainingData = model.generateNormalData(nSamples);
+    
+    // Train model
+    const result = model.trainModel(trainingData, epochs);
+    
+    // Update UI
+    const finalLoss = result.final_loss.toFixed(6);
+    document.getElementById('trainingLoss').textContent = finalLoss;
+    document.getElementById('trainingStatus').textContent = 'TRAINED';
+    document.getElementById('detectBtn').disabled = false;
+
+    // Update chart
+    updateLossChart(result.loss_history);
+
+    showAlert(`Model trained successfully! Final loss: ${finalLoss}`, 'success');
+  } catch (error) {
+    showAlert(`Training error: ${error.message}`, 'error');
+    console.error(error);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function detectAnomaly() {
+  if (!model.is_trained) {
+    showAlert('Train model first!', 'warning');
+    return;
+  }
+
+  const inputs = document.querySelectorAll('#sensorInputs input');
+  const sensorValues = Array.from(inputs).map(i => parseFloat(i.value) || 0);
+
+  const result = model.detectAnomaly(sensorValues);
+
+  const resultDiv = document.getElementById('detectionResult');
+  const isAnomaly = result.is_anomaly;
+
+  resultDiv.className = `detection-result show ${isAnomaly ? 'anomaly' : 'normal'}`;
+  resultDiv.innerHTML = `
+    <div class="result-title">${isAnomaly ? '⚠ ANOMALY DETECTED' : '✓ NORMAL'}</div>
+    <div class="result-value">${(result.score * 100).toFixed(2)}%</div>
+    <div style="font-size: 12px; color: var(--text-dim);">Reconstruction Error: ${result.reconstruction_error}</div>
+  `;
+
+  updateMetrics();
+}
+
+function simulateScenario() {
+  if (!model.is_trained) {
+    showAlert('Train model first!', 'warning');
+    return;
+  }
+
+  const scenario = document.getElementById('scenarioType').value;
+  const nPoints = parseInt(document.getElementById('nPoints').value);
+
+  const data = model.simulateScenario(scenario, nPoints);
+
+  // Detect anomalies in each point
+  let anomalyCount = 0;
+  const scores = [];
+
+  for (let point of data) {
+    const result = model.detectAnomaly(point);
+    scores.push(result.score * 100);
+    if (result.is_anomaly) anomalyCount++;
+  }
+
+  // Update metrics
+  updateMetrics();
+
+  // Update chart
+  updateSimulationChart(scores, scenario);
+
+  showAlert(`Simulation complete: ${anomalyCount} anomalies detected`, 'success');
+}
+
+function updateLossChart(lossHistory) {
+  const ctx = document.getElementById('lossChart').getContext('2d');
+
+  if (lossChart) lossChart.destroy();
+
+  lossChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Array.from({length: lossHistory.length}, (_, i) => i + 1),
+      datasets: [{
+        label: 'Training Loss',
+        data: lossHistory,
+        borderColor: '#00d4ff',
+        backgroundColor: 'rgba(0,212,255,0.05)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#ff4d00'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: {
+          grid: { color: 'rgba(0,212,255,0.1)' },
+          ticks: { color: '#4a6272', font: { size: 11 } }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: '#4a6272', font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+function updateSimulationChart(scores, scenario) {
+  const ctx = document.getElementById('simulationChart').getContext('2d');
+
+  if (simulationChart) simulationChart.destroy();
+
+  const threshold = model.threshold * 100;
+
+  simulationChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Array.from({length: scores.length}, (_, i) => i + 1),
+      datasets: [
+        {
+          label: 'Reconstruction Error',
+          data: scores,
+          borderColor: '#00d4ff',
+          backgroundColor: 'rgba(0,212,255,0.05)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0
+        },
+        {
+          label: 'Anomaly Threshold',
+          data: Array(scores.length).fill(threshold),
+          borderColor: '#ff2244',
+          borderDash: [5, 5],
+          borderWidth: 2,
+          pointRadius: 0,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: { color: '#c8dde8', font: { size: 12 } }
+        }
+      },
+      scales: {
+        y: {
+          grid: { color: 'rgba(0,212,255,0.1)' },
+          ticks: { color: '#4a6272', font: { size: 11 } }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: '#4a6272', font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+function updateMetrics() {
+  const metrics = model.getMetrics();
+  document.getElementById('anomaliesCount').textContent = metrics.anomalies_found;
+  document.getElementById('totalDetections').textContent = metrics.total_detections;
+}
+
+// Initialize on load
+window.addEventListener('load', () => {
+  initializeSensorInputs();
+});
+</script>
+</body>
+</html>
