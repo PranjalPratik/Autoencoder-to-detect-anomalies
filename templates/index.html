@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENTINEL — Industrial Anomaly Detection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #030609;
+    --surface: #080e14;
+    --panel: #0a1520;
+    --border: #0d2137;
+    --accent: #00d4ff;
+    --accent2: #ff4d00;
+    --accent3: #00ff88;
+    --warn: #ffaa00;
+    --text: #c8dde8;
+    --text-dim: #4a6272;
+    --text-bright: #e8f4ff;
+    --danger: #ff2244;
+    --safe: #00ff88;
+    --grid: rgba(0,212,255,0.04);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 400;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Scanline effect */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 0 20px 40px;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 30px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo-icon {
+    width: 48px;
+    height: 48px;
+    position: relative;
+  }
+
+  .logo-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .logo-text h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.8rem;
+    font-weight: 900;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    text-shadow: 0 0 20px rgba(0,212,255,0.5);
+    line-height: 1;
+  }
+
+  .logo-text p {
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .status-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+
+  .status-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .status-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--accent);
+  }
+
+  .status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    background: rgba(0,212,255,0.05);
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    animation: pulse 2s infinite;
+  }
+
+  .dot.active { background: var(--accent3); }
+  .dot.warning { background: var(--warn); }
+  .dot.danger { background: var(--danger); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* MAIN GRID */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .left-col { display: flex; flex-direction: column; gap: 16px; }
+  .right-col { display: flex; flex-direction: column; gap: 16px; }
+
+  /* PANELS */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.5;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,212,255,0.03);
+  }
+
+  .panel-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .panel-badge {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+
+  .panel-body { padding: 18px; }
+
+  /* BUTTONS */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border: 1px solid;
+    background: transparent;
+    cursor: pointer;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .btn:hover::before { opacity: 0.08; }
+
+  .btn-primary {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 0 20px rgba(0,212,255,0.3);
+  }
+
+  .btn-danger {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  .btn-success {
+    border-color: var(--accent3);
+    color: var(--accent3);
+  }
+
+  .btn-warn {
+    border-color: var(--warn);
+    color: var(--warn);
+  }
+
+  .btn-full { width: 100%; }
+
+  .btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* INPUTS */
+  .input-group { margin-bottom: 14px; }
+
+  .input-label {
+    display: block;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    font-family: 'Share Tech Mono', monospace;
+    margin-bottom: 6px;
+  }
+
+  .input-field {
+    width: 100%;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .input-field:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 10px rgba(0,212,255,0.1);
+  }
+
+  .input-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  /* SENSOR SLIDERS */
+  .sensor-grid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .sensor-item {
+    display: grid;
+    grid-template-columns: 100px 1fr 70px;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sensor-name {
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .sensor-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    outline: none;
+    cursor: pointer;
+  }
+
+  .sensor-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 0 8px rgba(0,212,255,0.5);
+  }
+
+  .sensor-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--accent);
+    text-align: right;
+  }
+
+  /* RESULT DISPLAY */
+  .result-display {
+    padding: 20px;
+    border: 1px solid var(--border);
+    background: rgba(0,0,0,0.3);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .result-status {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+  }
+
+  .result-status.normal { color: var(--safe); text-shadow: 0 0 20px rgba(0,255,136,0.5); }
+  .result-status.anomaly { color: var(--danger); text-shadow: 0 0 20px rgba(255,34,68,0.5); animation: flicker 0.5s infinite; }
+
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .result-error {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+
+  .result-score {
+    font-family: 'Orbitron', monospace;
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: var(--text-bright);
+  }
+
+  /* SCORE RING */
+  .score-ring-container {
+    position: relative;
+    width: 100px;
+    height: 100px;
+  }
+
+  .score-ring-container svg {
+    transform: rotate(-90deg);
+  }
+
+  .score-ring-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* FEATURE BAR */
+  .feature-bars { display: flex; flex-direction: column; gap: 6px; }
+
+  .feature-bar-item {
+    display: grid;
+    grid-template-columns: 90px 1fr 55px;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .feature-bar-name {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .feature-bar-track {
+    height: 4px;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .feature-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.4s ease;
+    position: relative;
+  }
+
+  .feature-bar-fill.high { background: var(--danger); }
+  .feature-bar-fill.med { background: var(--warn); }
+
+  .feature-bar-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-align: right;
+  }
+
+  /* CHART CONTAINERS */
+  .chart-wrap {
+    position: relative;
+    height: 200px;
+  }
+
+  .chart-wrap-tall {
+    position: relative;
+    height: 260px;
+  }
+
+  /* SCENARIO BUTTONS */
+  .scenario-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  /* LOSS DISPLAY */
+  .metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .metric-row:last-child { border-bottom: none; }
+
+  .metric-key {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .metric-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--accent);
+  }
+
+  /* TIMELINE */
+  .timeline {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .timeline-dot {
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--border);
+    transition: background 0.3s;
+  }
+
+  .timeline-dot.normal-dot { background: rgba(0,255,136,0.3); border-color: var(--safe); }
+  .timeline-dot.anomaly-dot { background: rgba(255,34,68,0.5); border-color: var(--danger); }
+
+  /* LOG */
+  .log-area {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    padding: 10px;
+    max-height: 120px;
+    overflow-y: auto;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+
+  .log-entry { padding: 2px 0; }
+  .log-entry .ts { color: var(--text-dim); margin-right: 8px; }
+  .log-entry.ok .msg { color: var(--safe); }
+  .log-entry.err .msg { color: var(--danger); }
+  .log-entry.info .msg { color: var(--accent); }
+  .log-entry.warn .msg { color: var(--warn); }
+
+  /* PROGRESS */
+  .progress-bar {
+    height: 4px;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+    margin-top: 10px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent3));
+    width: 0%;
+    transition: width 0.3s;
+    position: relative;
+  }
+
+  .progress-fill::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: -2px;
+    width: 4px;
+    height: 8px;
+    background: white;
+    opacity: 0.8;
+  }
+
+  /* ARCH DIAGRAM */
+  .arch-diagram {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 12px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+  }
+
+  .arch-layer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .arch-node {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid var(--accent);
+    background: rgba(0,212,255,0.1);
+    box-shadow: 0 0 6px rgba(0,212,255,0.3);
+  }
+
+  .arch-label {
+    font-size: 0.55rem;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    text-align: center;
+  }
+
+  .arch-arrow {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    margin-top: -14px;
+  }
+
+  .arch-divider {
+    width: 1px;
+    height: 60px;
+    background: var(--border);
+    margin: 0 4px;
+    position: relative;
+  }
+
+  .arch-divider::after {
+    content: 'LATENT';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(90deg);
+    font-size: 0.45rem;
+    color: var(--accent);
+    font-family: 'Share Tech Mono', monospace;
+    white-space: nowrap;
+    letter-spacing: 0.1em;
+  }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* RESPONSIVE */
+  @media (max-width: 1100px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 14px 0;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="24,4 44,14 44,34 24,44 4,34 4,14" stroke="#00d4ff" stroke-width="1.5" fill="rgba(0,212,255,0.05)"/>
+          <circle cx="24" cy="24" r="8" stroke="#00d4ff" stroke-width="1" fill="rgba(0,212,255,0.1)"/>
+          <circle cx="24" cy="24" r="3" fill="#00d4ff"/>
+          <line x1="24" y1="16" x2="24" y2="4" stroke="#00d4ff" stroke-width="0.5" opacity="0.5"/>
+          <line x1="24" y1="32" x2="24" y2="44" stroke="#00d4ff" stroke-width="0.5" opacity="0.5"/>
+          <line x1="16" y1="24" x2="4" y2="24" stroke="#00d4ff" stroke-width="0.5" opacity="0.5"/>
+          <line x1="32" y1="24" x2="44" y2="24" stroke="#00d4ff" stroke-width="0.5" opacity="0.5"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <h1>SENTINEL</h1>
+        <p>Autoencoder Anomaly Detection System v2.0</p>
+      </div>
+    </div>
+    <div class="status-bar">
+      <div class="status-item">
+        <span class="status-label">Model</span>
+        <span class="status-value" id="headerModelStatus">OFFLINE</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Threshold</span>
+        <span class="status-value" id="headerThreshold">—</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Detections</span>
+        <span class="status-value" id="headerDetections">0</span>
+      </div>
+      <div class="status-indicator">
+        <div class="dot" id="systemDot"></div>
+        <span style="font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:var(--text-dim);" id="systemStatus">STANDBY</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <!-- LEFT COLUMN -->
+    <div class="left-col">
+
+      <!-- TRAIN PANEL -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Model Training</span>
+          <span class="panel-badge">AUTOENCODER</span>
+        </div>
+        <div class="panel-body">
+          <div class="input-row">
+            <div class="input-group">
+              <label class="input-label">Samples</label>
+              <input type="number" class="input-field" id="nSamples" value="1000" min="100" max="5000">
+            </div>
+            <div class="input-group">
+              <label class="input-label">Epochs</label>
+              <input type="number" class="input-field" id="nEpochs" value="50" min="10" max="200">
+            </div>
+          </div>
+
+          <!-- Architecture Diagram -->
+          <div class="arch-diagram">
+            <div class="arch-layer">
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-label">INPUT<br>8</div>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-layer">
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-label">ENC<br>4</div>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-layer">
+              <div class="arch-node" style="box-shadow:0 0 12px rgba(0,212,255,0.8);"></div>
+              <div class="arch-node" style="box-shadow:0 0 12px rgba(0,212,255,0.8);"></div>
+              <div class="arch-label">LATENT<br>2</div>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-layer">
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-label">DEC<br>4</div>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-layer">
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-node"></div>
+              <div class="arch-label">OUTPUT<br>8</div>
+            </div>
+          </div>
+
+          <div class="progress-bar" style="margin-bottom:10px;">
+            <div class="progress-fill" id="trainProgress"></div>
+          </div>
+
+          <button class="btn btn-primary btn-full" id="trainBtn" onclick="trainModel()">
+            ⚡ Initialize & Train Model
+          </button>
+
+          <div id="trainMetrics" style="display:none;margin-top:12px;">
+            <div class="metric-row">
+              <span class="metric-key">Final Loss</span>
+              <span class="metric-val" id="finalLoss">—</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-key">Threshold</span>
+              <span class="metric-val" id="thresholdVal">—</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-key">Architecture</span>
+              <span class="metric-val">8→4→2→4→8</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MANUAL INPUT PANEL -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Manual Sensor Input</span>
+          <span class="panel-badge">REALTIME</span>
+        </div>
+        <div class="panel-body">
+          <div class="sensor-grid" id="sensorSliders"></div>
+          <div class="divider"></div>
+          <button class="btn btn-success btn-full" onclick="runDetection()" id="detectBtn" disabled>
+            ◉ Analyze Reading
+          </button>
+        </div>
+      </div>
+
+      <!-- SYSTEM LOG -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">System Log</span>
+          <span class="panel-badge">LIVE</span>
+        </div>
+        <div class="panel-body" style="padding:10px;">
+          <div class="log-area" id="logArea"></div>
+        </div>
+      </div>
+
+    </div><!-- end left col -->
+
+    <!-- RIGHT COLUMN -->
+    <div class="right-col">
+
+      <!-- TOP ROW: Result + Features -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+        <!-- DETECTION RESULT -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Detection Result</span>
+            <span class="panel-badge" id="detectionCount">0 SCANS</span>
+          </div>
+          <div class="panel-body">
+            <div class="result-display" id="resultDisplay">
+              <div style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);letter-spacing:0.2em;">
+                AWAITING INPUT
+              </div>
+            </div>
+            <div class="divider"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;">
+              <div>
+                <div class="input-label">Recon Error</div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:1rem;color:var(--text-bright);" id="reconError">—</div>
+              </div>
+              <div>
+                <div class="input-label">Threshold</div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:1rem;color:var(--text-bright);" id="thresholdDisp">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FEATURE CONTRIBUTIONS -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Feature Error Map</span>
+            <span class="panel-badge">SENSOR × 8</span>
+          </div>
+          <div class="panel-body">
+            <div class="feature-bars" id="featureBars">
+              <div style="color:var(--text-dim);font-size:0.7rem;font-family:'Share Tech Mono',monospace;text-align:center;padding:20px 0;">
+                Run detection to see contributions
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TRAINING LOSS CHART -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Training Loss Curve</span>
+          <span class="panel-badge">MSE OBJECTIVE</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap">
+            <canvas id="lossChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- SIMULATION PANEL -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Scenario Simulation</span>
+          <span class="panel-badge">BATCH ANALYSIS</span>
+        </div>
+        <div class="panel-body">
+          <div class="scenario-grid" style="margin-bottom:14px;">
+            <button class="btn btn-primary" onclick="runSimulation('normal')" id="simBtn" disabled>⬤ Normal Operation</button>
+            <button class="btn btn-danger" onclick="runSimulation('overheat')" id="simBtn2" disabled>🌡 Overheat Fault</button>
+            <button class="btn btn-warn" onclick="runSimulation('vibration')" id="simBtn3" disabled>〜 Vibration Fault</button>
+            <button class="btn btn-danger" onclick="runSimulation('power_surge')" id="simBtn4" disabled>⚡ Power Surge</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div style="background:rgba(0,0,0,0.3);border:1px solid var(--border);padding:10px;text-align:center;">
+              <div class="input-label">Anomaly Rate</div>
+              <div style="font-family:'Orbitron',monospace;font-size:1.5rem;color:var(--danger);" id="anomalyRate">—</div>
+            </div>
+            <div style="background:rgba(0,0,0,0.3);border:1px solid var(--border);padding:10px;text-align:center;">
+              <div class="input-label">Data Points</div>
+              <div style="font-family:'Orbitron',monospace;font-size:1.5rem;color:var(--accent);" id="dataPoints">—</div>
+            </div>
+          </div>
+
+          <div class="chart-wrap-tall">
+            <canvas id="simChart"></canvas>
+          </div>
+
+          <div class="input-label" style="margin-top:10px;margin-bottom:6px;">Detection Timeline</div>
+          <div class="timeline" id="timeline"></div>
+        </div>
+      </div>
+
+    </div><!-- end right col -->
+  </div><!-- end main grid -->
+</div><!-- end container -->
+
+<script>
+const SENSORS = [
+  { name: 'Temperature', unit: '°C', min: 40, max: 100, def: 60 },
+  { name: 'Pressure',    unit: 'bar', min: 0.5, max: 2.0, def: 1.0, step: 0.01 },
+  { name: 'RPM',         unit: 'rpm', min: 1000, max: 2500, def: 1500 },
+  { name: 'Vibration',   unit: 'mm/s', min: 10, max: 80, def: 20 },
+  { name: 'Voltage',     unit: 'V', min: 180, max: 280, def: 220 },
+  { name: 'Current',     unit: 'A', min: 5, max: 20, def: 10 },
+  { name: 'Flow Rate',   unit: 'L/m', min: 20, max: 70, def: 40 },
+  { name: 'Humidity',    unit: '%', min: 30, max: 80, def: 50 },
+];
+
+let lossChart = null, simChart = null;
+let scanCount = 0;
+
+// Init sliders
+function initSliders() {
+  const grid = document.getElementById('sensorSliders');
+  grid.innerHTML = SENSORS.map((s, i) => `
+    <div class="sensor-item">
+      <span class="sensor-name">${s.name}</span>
+      <input type="range" class="sensor-slider" id="slider_${i}"
+        min="${s.min}" max="${s.max}" step="${s.step || 1}" value="${s.def}"
+        oninput="document.getElementById('sval_${i}').textContent = parseFloat(this.value).toFixed(s.step?2:0) + '${s.unit}'">
+      <span class="sensor-val" id="sval_${i}">${s.def}${s.unit}</span>
+    </div>
+  `).join('');
+}
+
+// Charts
+function initCharts() {
+  const opts = {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 400 },
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: 'rgba(13,33,55,0.8)' }, ticks: { color: '#4a6272', font: { family: 'Share Tech Mono', size: 9 } } },
+      y: { grid: { color: 'rgba(13,33,55,0.8)' }, ticks: { color: '#4a6272', font: { family: 'Share Tech Mono', size: 9 } } }
+    }
+  };
+
+  lossChart = new Chart(document.getElementById('lossChart'), {
+    type: 'line',
+    data: { labels: [], datasets: [{ label: 'Loss', data: [], borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.05)', borderWidth: 1.5, pointRadius: 2, tension: 0.4 }] },
+    options: { ...opts, scales: { ...opts.scales, y: { ...opts.scales.y, title: { display: true, text: 'MSE Loss', color: '#4a6272', font: { family: 'Share Tech Mono', size: 9 } } } } }
+  });
+
+  simChart = new Chart(document.getElementById('simChart'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'Recon Error', data: [], borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.05)', borderWidth: 1.5, pointRadius: 0, tension: 0.3, yAxisID: 'y' },
+        { label: 'Threshold', data: [], borderColor: '#ffaa00', borderDash: [4,4], borderWidth: 1, pointRadius: 0, yAxisID: 'y' }
+      ]
+    },
+    options: {
+      ...opts,
+      scales: {
+        x: opts.scales.x,
+        y: { ...opts.scales.y, title: { display: true, text: 'Reconstruction Error', color: '#4a6272', font: { family: 'Share Tech Mono', size: 9 } } }
+      }
+    }
+  });
+}
+
+function log(msg, type = 'info') {
+  const area = document.getElementById('logArea');
+  const ts = new Date().toLocaleTimeString('en', { hour12: false });
+  const el = document.createElement('div');
+  el.className = `log-entry ${type}`;
+  el.innerHTML = `<span class="ts">[${ts}]</span><span class="msg">${msg}</span>`;
+  area.insertBefore(el, area.firstChild);
+  if (area.children.length > 50) area.removeChild(area.lastChild);
+}
+
+async function trainModel() {
+  const btn = document.getElementById('trainBtn');
+  btn.disabled = true;
+  btn.textContent = '⟳ Training...';
+  document.getElementById('systemDot').className = 'dot warning';
+  document.getElementById('systemStatus').textContent = 'TRAINING';
+
+  const prog = document.getElementById('trainProgress');
+  let p = 0;
+  const iv = setInterval(() => { p = Math.min(95, p + Math.random() * 8); prog.style.width = p + '%'; }, 200);
+
+  log('Initializing autoencoder 8→4→2→4→8', 'info');
+  log('Generating normal operation data...', 'info');
+
+  try {
+    const res = await fetch('/api/train', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        n_samples: +document.getElementById('nSamples').value,
+        epochs: +document.getElementById('nEpochs').value
+      })
+    });
+    const data = await res.json();
+    clearInterval(iv);
+    prog.style.width = '100%';
+
+    document.getElementById('finalLoss').textContent = data.final_loss;
+    document.getElementById('thresholdVal').textContent = data.threshold;
+    document.getElementById('thresholdDisp').textContent = data.threshold;
+    document.getElementById('headerThreshold').textContent = data.threshold;
+    document.getElementById('headerModelStatus').textContent = 'ONLINE';
+    document.getElementById('trainMetrics').style.display = 'block';
+
+    // Update loss chart
+    lossChart.data.labels = data.loss_curve.map(d => `E${d.epoch}`);
+    lossChart.data.datasets[0].data = data.loss_curve.map(d => d.loss);
+    lossChart.update();
+
+    // Enable buttons
+    ['detectBtn','simBtn','simBtn2','simBtn3','simBtn4'].forEach(id => {
+      document.getElementById(id).disabled = false;
+    });
+
+    document.getElementById('systemDot').className = 'dot active';
+    document.getElementById('systemStatus').textContent = 'READY';
+    btn.textContent = '✓ Model Trained';
+    log(`Training complete. Loss: ${data.final_loss}, Threshold: ${data.threshold}`, 'ok');
+    log(`Trained on ${data.n_samples} samples for ${data.epochs} epochs`, 'info');
+
+    setTimeout(() => { btn.disabled = false; btn.textContent = '⚡ Re-Train Model'; }, 2000);
+  } catch (e) {
+    clearInterval(iv);
+    log('Training failed: ' + e.message, 'err');
+    btn.disabled = false;
+    btn.textContent = '⚡ Initialize & Train Model';
+  }
+}
+
+async function runDetection() {
+  const vals = SENSORS.map((_, i) => parseFloat(document.getElementById(`slider_${i}`).value));
+  try {
+    const res = await fetch('/api/detect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sensor_values: vals })
+    });
+    const data = await res.json();
+
+    scanCount++;
+    document.getElementById('detectionCount').textContent = `${scanCount} SCANS`;
+    document.getElementById('headerDetections').textContent = scanCount;
+    document.getElementById('reconError').textContent = data.reconstruction_error;
+
+    const display = document.getElementById('resultDisplay');
+    const isAnom = data.is_anomaly;
+
+    display.innerHTML = `
+      <div class="result-status ${isAnom ? 'anomaly' : 'normal'}">${isAnom ? '⚠ ANOMALY' : '✓ NORMAL'}</div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);">ANOMALY SCORE</div>
+      <div style="font-family:'Orbitron',monospace;font-size:2.5rem;font-weight:900;color:${isAnom ? 'var(--danger)' : 'var(--safe)'};">${data.anomaly_score}<span style="font-size:1rem;">/100</span></div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);">CONFIDENCE: ${data.confidence}%</div>
+    `;
+
+    // Feature bars
+    const maxErr = Math.max(...data.feature_contributions.map(f => f.error));
+    document.getElementById('featureBars').innerHTML = data.feature_contributions.map(f => {
+      const pct = maxErr > 0 ? (f.error / maxErr * 100) : 0;
+      const cls = pct > 70 ? 'high' : pct > 40 ? 'med' : '';
+      return `
+        <div class="feature-bar-item">
+          <span class="feature-bar-name">${f.name}</span>
+          <div class="feature-bar-track">
+            <div class="feature-bar-fill ${cls}" style="width:${pct}%"></div>
+          </div>
+          <span class="feature-bar-val">${f.error}</span>
+        </div>
+      `;
+    }).join('');
+
+    const top = data.feature_contributions.sort((a,b) => b.error - a.error)[0];
+    log(`Scan #${scanCount}: ${isAnom ? '⚠ ANOMALY' : 'NORMAL'} | Score: ${data.anomaly_score} | Top sensor: ${top.name}`, isAnom ? 'err' : 'ok');
+    document.getElementById('systemDot').className = `dot ${isAnom ? 'danger' : 'active'}`;
+
+  } catch (e) {
+    log('Detection error: ' + e.message, 'err');
+  }
+}
+
+async function runSimulation(scenario) {
+  log(`Running ${scenario.toUpperCase()} simulation...`, 'info');
+  document.getElementById('anomalyRate').textContent = '...';
+
+  try {
+    const res = await fetch('/api/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenario, n_points: 60 })
+    });
+    const data = await res.json();
+
+    document.getElementById('anomalyRate').textContent = data.anomaly_rate + '%';
+    document.getElementById('dataPoints').textContent = data.n_points;
+
+    const results = data.results;
+    const threshold = results[0]?.threshold || 0;
+
+    simChart.data.labels = results.map(r => r.timestamp);
+    simChart.data.datasets[0].data = results.map(r => r.reconstruction_error);
+    simChart.data.datasets[1].data = results.map(() => threshold);
+
+    // Color anomaly points
+    simChart.data.datasets[0].pointBackgroundColor = results.map(r =>
+      r.is_anomaly ? '#ff2244' : '#00d4ff'
+    );
+    simChart.data.datasets[0].pointRadius = results.map(r => r.is_anomaly ? 4 : 0);
+    simChart.data.datasets[0].borderColor = scenario === 'normal' ? '#00d4ff' : '#ff4d00';
+    simChart.update();
+
+    // Timeline
+    const tl = document.getElementById('timeline');
+    tl.innerHTML = results.map(r =>
+      `<div class="timeline-dot ${r.is_anomaly ? 'anomaly-dot' : 'normal-dot'}" title="t=${r.timestamp}: ${r.is_anomaly ? 'ANOMALY' : 'normal'}"></div>`
+    ).join('');
+
+    const scenarioLabels = { normal: 'Normal Operation', overheat: 'Overheat Fault', vibration: 'Vibration Fault', power_surge: 'Power Surge' };
+    log(`${scenarioLabels[scenario]}: ${data.anomaly_rate}% anomaly rate over ${data.n_points} points`, data.anomaly_rate > 20 ? 'warn' : 'ok');
+
+  } catch (e) {
+    log('Simulation error: ' + e.message, 'err');
+  }
+}
+
+// Init
+initSliders();
+initCharts();
+log('SENTINEL system initialized', 'info');
+log('Load 8-sensor autoencoder model → Train → Detect', 'info');
+</script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+# Created by venv; see https://docs.python.org/3/library/venv.html
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environment specifics
+pyvenv.cfg
+bin/
+include/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+.pytest_cache/
+
+# Testing
+.coverage
+.tox/
+
+# Local development
+.env
+local_settings.py
+
+# OS
+Thumbs.db
+
+# Large directories (but keep essential files)
+site-packages/
+
+# GitHub Pages deployment
+# Include these files:
+!.github/
+!.github/workflows/
+!.github/workflows/deploy.yml
+!index-gh-pages.html
+!model_weights.json
+!js/
+!js/autoencoder.js
+!export_model.py
+!setup-github-pages.sh
+!setup-github-pages.bat
+!GITHUB_PAGES_DEPLOYMENT.md
