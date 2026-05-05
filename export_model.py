@@ -13,21 +13,11 @@ def export_model_to_json(filepath='model_weights.json'):
     print("🤖 Initializing Sensor Autoencoder...")
     model = SensorAutoencoder()
     
-    print("📊 Generating training data...")
-    # Generate normal operational data
-    training_data = []
-    for _ in range(1000):
-        sample = []
-        for _ in range(8):
-            # Normal sensor readings (0-100)
-            sample.append(np.random.normal(50, 15))
-        training_data.append(np.clip(sample, 0, 100))
+    print("� Training model...")
+    # Use the generate_and_train method
+    result = model.generate_and_train(n_samples=1000, epochs=50)
     
-    print("🔄 Training model...")
-    training_data = np.array(training_data)
-    result = model.train(training_data, epochs=50)
-    
-    print(f"✅ Training complete. Final loss: {model.training_loss[-1]:.6f}")
+    print(f"✅ Training complete. Final loss: {result['final_loss']:.6f}")
     
     # Convert weights to JSON-serializable format
     weights_dict = {
@@ -40,7 +30,7 @@ def export_model_to_json(filepath='model_weights.json'):
         'W4': model.W4.tolist(),
         'b4': model.b4.tolist(),
         'threshold': float(model.threshold),
-        'training_loss': model.training_loss,
+        'training_loss': result['loss_curve'],
         'n_features': int(model.n_features),
         'is_trained': True
     }
